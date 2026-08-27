@@ -46,14 +46,12 @@ S3 Secure Storage — Encrypted, versioned log storage
 
 Infrastructure Security — IAM roles, least privilege, secure defaults
 
-📂 Project Structure Code
-AWS-Security-Monitoring-System/AWS‑Security‑Monitoring‑System/
+AWS‑Security‑Monitoring‑System/
 │── terraform/
 ├── main.tf
 ├── variables.tf
 │── docs/
 │── README.md
-
 
 🔧 Prerequisites
 AWS Account
