@@ -112,6 +112,7 @@ To destroy the environment:
 
 bash
 terraform destroy
+
 📡 Alerts & Monitoring
 Once deployed:
 
