@@ -141,6 +141,7 @@ Pull requests are welcome.
 For major changes, please open an issue first to discuss what you’d like to modify.
 
 📘 Certifications & Skills Demonstrated
+
 HashiCorp Certified Terraform Associate
 
 AWS Solutions Architect Associate
