@@ -6,6 +6,8 @@ The AWS‑Security‑Monitoring‑System is designed to detect, log, and alert o
 
 🏗 Architecture
 The system follows this flow:
+
+
 <img width="506" height="225" alt="AWS-Security-Pipeline" src="https://github.com/user-attachments/assets/58797f82-312e-4af2-b2c5-312f8f308ae0" />
 
 
