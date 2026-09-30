@@ -15,8 +15,3 @@ variable "other_secret" {
   type        = string
   sensitive   = true
 }
-
-variable "cloud_watch_logs_group_arn" {
-  description = "ARN of the CloudWatch Logs Log Group for CloudTrail"
-  type        = string
-}
