@@ -116,7 +116,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
         Resource  = "${aws_s3_bucket.cloudtrail_bucket.arn}/${local.trail_s3_prefix}/AWSLogs/${local.account_id}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "aws:SourceArn" = local.trail_arn
           }
         }
