@@ -447,6 +447,3 @@ resource "aws_cloudwatch_metric_alarm" "secret_accessed_alarm" {
 
   actions_enabled = true
 }
-
-
->>>>>>> 2baa593 (Final Commit)
