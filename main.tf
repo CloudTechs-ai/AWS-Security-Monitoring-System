@@ -60,7 +60,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
         Effect    = "Allow",
         Principal = { Service = "cloudtrail.amazonaws.com" },
         Action    = "s3:PutObject",
-        Resource  = "${aws_s3_bucket.cloudtrail_bucket.arn}/cloudtechs-secrets-manager-trail-no/*",
+        Resource = "${aws_s3_bucket.cloudtrail_bucket.arn}/cloudtechs-secrets-manager-trail-no/*"
         Condition = {
           StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
         }
@@ -112,6 +112,7 @@ resource "aws_iam_role_policy" "cloudtrail_to_cloudwatch_policy" {
 # CloudTrail
 # -------------------------------
 
+data "aws_caller_identity" "current" {}
 resource "aws_cloudtrail" "secrets_manager_trail" {
   depends_on = [
     aws_cloudwatch_log_group.cloudtrail_log_group,
@@ -120,13 +121,13 @@ resource "aws_cloudtrail" "secrets_manager_trail" {
 
   name                          = "secrets-manager-trail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.bucket
-  s3_key_prefix                 = "cloudtechs-secrets-manager-trail-no"
+  s3_key_prefix                 = "cloudtechs-security-monitoring-${data.aws_caller_identity.current.account_id}"
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
   enable_logging                = true
 
-  cloud_watch_logs_group_arn = var.cloud_watch_logs_group_arn
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_to_cloudwatch.arn
 
   sns_topic_name = aws_sns_topic.security_alarms.name
