@@ -13,12 +13,41 @@ provider "aws" {
   region = "us-east-1"
 }
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  account_id      = data.aws_caller_identity.current.account_id
+  region          = "us-east-1"
+  trail_name      = "secrets-manager-trail"
+  trail_arn       = "arn:aws:cloudtrail:${local.region}:${local.account_id}:trail/${local.trail_name}"
+  trail_s3_prefix = "cloudtrail"
+
+  # Each entry becomes a CloudWatch metric filter + alarm
+  detections = {
+    SecretAccessed = {
+      pattern = "{ ($.eventName = \"GetSecretValue\") }"
+    }
+    RootAccountUsage = {
+      pattern = "{ $.userIdentity.type = \"Root\" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != \"AwsServiceEvent\" }"
+    }
+    IAMPolicyChange = {
+      pattern = "{ ($.eventName = DeleteGroupPolicy) || ($.eventName = DeleteRolePolicy) || ($.eventName = DeleteUserPolicy) || ($.eventName = PutGroupPolicy) || ($.eventName = PutRolePolicy) || ($.eventName = PutUserPolicy) || ($.eventName = CreatePolicy) || ($.eventName = DeletePolicy) || ($.eventName = CreatePolicyVersion) || ($.eventName = DeletePolicyVersion) || ($.eventName = AttachRolePolicy) || ($.eventName = DetachRolePolicy) || ($.eventName = AttachUserPolicy) || ($.eventName = DetachUserPolicy) || ($.eventName = AttachGroupPolicy) || ($.eventName = DetachGroupPolicy) }"
+    }
+    ConsoleLoginFailure = {
+      pattern = "{ ($.eventName = \"ConsoleLogin\") && ($.errorMessage = \"Failed authentication\") }"
+    }
+  }
+}
+
 # -------------------------------
 # Secrets Manager
 # -------------------------------
 resource "aws_secretsmanager_secret" "monitoring_secret" {
   name        = "cloudtechs-monitoring-secret"
   description = "Secret created for CloudTrail/CloudWatch monitoring system"
+
+  # Allows immediate delete/recreate on terraform destroy (demo project)
+  recovery_window_in_days = 0
 }
 
 resource "aws_secretsmanager_secret_version" "monitoring_secret_value" {
@@ -34,8 +63,8 @@ resource "aws_secretsmanager_secret_version" "monitoring_secret_value" {
 # S3 Bucket for CloudTrail logs
 # -------------------------------
 resource "aws_s3_bucket" "cloudtrail_bucket" {
-  bucket = "cloudtechs-security-monitoring-${data.aws_caller_identity.current.account_id}"
-
+  bucket        = "cloudtechs-security-monitoring-${local.account_id}"
+  force_destroy = true
 
   tags = {
     Name        = "CloudTrailLogBucket"
@@ -43,27 +72,53 @@ resource "aws_s3_bucket" "cloudtrail_bucket" {
   }
 }
 
+resource "aws_s3_bucket_public_access_block" "cloudtrail_bucket" {
+  bucket                  = aws_s3_bucket.cloudtrail_bucket.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail_bucket" {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
 resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
   bucket = aws_s3_bucket.cloudtrail_bucket.id
 
+  depends_on = [aws_s3_bucket_public_access_block.cloudtrail_bucket]
+
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AWSCloudTrailAclCheck",
-        Effect    = "Allow",
-        Principal = { Service = "cloudtrail.amazonaws.com" },
-        Action    = "s3:GetBucketAcl",
+        Sid       = "AWSCloudTrailAclCheck"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = "s3:GetBucketAcl"
         Resource  = aws_s3_bucket.cloudtrail_bucket.arn
+        Condition = {
+          StringEquals = { "aws:SourceArn" = local.trail_arn }
+        }
       },
       {
-        Sid       = "AWSCloudTrailWrite",
-        Effect    = "Allow",
-        Principal = { Service = "cloudtrail.amazonaws.com" },
-        Action    = "s3:PutObject",
-        Resource = "${aws_s3_bucket.cloudtrail_bucket.arn}/cloudtechs-secrets-manager-trail-no/*"
+        Sid       = "AWSCloudTrailWrite"
+        Effect    = "Allow"
+        Principal = { Service = "cloudtrail.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.cloudtrail_bucket.arn}/${local.trail_s3_prefix}/AWSLogs/${local.account_id}/*"
         Condition = {
-          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "aws:SourceArn" = local.trail_arn
+          }
         }
       }
     ]
@@ -85,44 +140,44 @@ resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
   name = "cloudtrail-to-cloudwatch-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [{
-      Effect    = "Allow",
-      Principal = { Service = "cloudtrail.amazonaws.com" },
+      Effect    = "Allow"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
       Action    = "sts:AssumeRole"
     }]
   })
 }
 
 resource "aws_iam_role_policy" "cloudtrail_to_cloudwatch_policy" {
+  name = "cloudtrail-to-cloudwatch-policy"
   role = aws_iam_role.cloudtrail_to_cloudwatch.id
 
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow",
+      Effect = "Allow"
       Action = [
         "logs:CreateLogStream",
         "logs:PutLogEvents"
-      ],
+      ]
       Resource = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
     }]
   })
 }
+
 # -------------------------------
 # CloudTrail
 # -------------------------------
-
-data "aws_caller_identity" "current" {}
 resource "aws_cloudtrail" "secrets_manager_trail" {
   depends_on = [
-    aws_cloudwatch_log_group.cloudtrail_log_group,
-    aws_iam_role.cloudtrail_to_cloudwatch
+    aws_s3_bucket_policy.cloudtrail_bucket_policy,
+    aws_iam_role_policy.cloudtrail_to_cloudwatch_policy
   ]
 
-  name                          = "secrets-manager-trail"
+  name                          = local.trail_name
   s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.bucket
-  s3_key_prefix                 = "cloudtechs-security-monitoring-${data.aws_caller_identity.current.account_id}"
+  s3_key_prefix                 = local.trail_s3_prefix
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_log_file_validation    = true
@@ -131,10 +186,6 @@ resource "aws_cloudtrail" "secrets_manager_trail" {
   cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_to_cloudwatch.arn
 
-  sns_topic_name = aws_sns_topic.security_alarms.name
-
-  kms_key_id = null
-
   event_selector {
     read_write_type           = "All"
     include_management_events = true
@@ -149,26 +200,6 @@ resource "aws_cloudtrail" "secrets_manager_trail" {
     Environment = "Production"
   }
 }
-
-# -------------------------------
-# Metric Filter for GetSecretValue
-# -------------------------------
-resource "aws_cloudwatch_log_metric_filter" "get_secret_value_filter" {
-  name           = "GetSecretsValue"
-  log_group_name = aws_cloudwatch_log_group.cloudtrail_log_group.name
-
-  # Must be a quoted string
-  pattern = "{ ($.eventName = \"GetSecretValue\") }"
-
-  metric_transformation {
-    name          = "Secret is accessed"
-    namespace     = "SecurityMetrics"
-    value         = "1"
-    default_value = 0
-    unit          = "Count"
-  }
-}
-
 
 # -------------------------------
 # SNS Topic + Subscription
@@ -187,108 +218,16 @@ resource "aws_sns_topic_policy" "security_alarms_policy" {
   arn = aws_sns_topic.security_alarms.arn
 
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudTrailPublish",
-        Effect = "Allow",
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        },
-        Action   = "SNS:Publish",
-        Resource = aws_sns_topic.security_alarms.arn
-      }
-    ]
-  })
-}
-
-# -------------------------------
-# CloudWatch Alarm
-# -------------------------------
-resource "aws_cloudwatch_metric_alarm" "secret_accessed_alarm" {
-  alarm_name          = "Secret is accessed"
-  comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
-  threshold           = 1
-  treat_missing_data  = "notBreaching"
-
-  namespace   = "SecurityMetrics"
-  metric_name = "Secret is accessed"
-  statistic   = "Average"
-  period      = 300
-
-  alarm_actions             = [aws_sns_topic.security_alarms.arn]
-  ok_actions                = [aws_sns_topic.security_alarms.arn]
-  insufficient_data_actions = [aws_sns_topic.security_alarms.arn]
-
-  actions_enabled = true
-}
-
-terraform {
-  required_version = ">= 1.8.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-east-1"
-}
-
-# -------------------------------
-# Secrets Manager
-# -------------------------------
-resource "aws_secretsmanager_secret" "monitoring_secret" {
-  name        = "cloudtechs-monitoring-secret"
-  description = "Secret created for CloudTrail/CloudWatch monitoring system"
-}
-
-resource "aws_secretsmanager_secret_version" "monitoring_secret_value" {
-  secret_id = aws_secretsmanager_secret.monitoring_secret.id
-  secret_string = jsonencode({
-    api_key     = var.api_key
-    oauth_token = var.oauth_token
-    other       = var.other_secret
-  })
-}
-
-# -------------------------------
-# S3 Bucket for CloudTrail logs
-# -------------------------------
-resource "aws_s3_bucket" "cloudtrail_bucket" {
-  bucket = "cloudtechs-secrets-manager-trail-no"
-
-  tags = {
-    Name        = "CloudTrailLogBucket"
-    Environment = "Production"
-  }
-}
-
-resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
-  bucket = aws_s3_bucket.cloudtrail_bucket.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid       = "AWSCloudTrailAclCheck",
-        Effect    = "Allow",
-        Principal = { Service = "cloudtrail.amazonaws.com" },
-        Action    = "s3:GetBucketAcl",
-        Resource  = aws_s3_bucket.cloudtrail_bucket.arn
-      },
-      {
-        Sid       = "AWSCloudTrailWrite",
-        Effect    = "Allow",
-        Principal = { Service = "cloudtrail.amazonaws.com" },
-        Action    = "s3:PutObject",
-        Resource  = "${aws_s3_bucket.cloudtrail_bucket.arn}/cloudtechs-secrets-manager-trail-no/*",
+        Sid       = "AllowCloudWatchAlarmsPublish"
+        Effect    = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action    = "SNS:Publish"
+        Resource  = aws_sns_topic.security_alarms.arn
         Condition = {
-          StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" }
+          StringEquals = { "aws:SourceAccount" = local.account_id }
         }
       }
     ]
@@ -296,154 +235,40 @@ resource "aws_s3_bucket_policy" "cloudtrail_bucket_policy" {
 }
 
 # -------------------------------
-# CloudWatch Log Group
+# Metric Filters + Alarms (one per detection)
 # -------------------------------
-resource "aws_cloudwatch_log_group" "cloudtrail_log_group" {
-  name              = "cloudtechs-secretsmanager-loggroup"
-  retention_in_days = 90
-}
+resource "aws_cloudwatch_log_metric_filter" "detections" {
+  for_each = local.detections
 
-# -------------------------------
-# IAM Role for CloudTrail -> CloudWatch
-# -------------------------------
-resource "aws_iam_role" "cloudtrail_to_cloudwatch" {
-  name = "cloudtrail-to-cloudwatch-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect    = "Allow",
-      Principal = { Service = "cloudtrail.amazonaws.com" },
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy" "cloudtrail_to_cloudwatch_policy" {
-  role = aws_iam_role.cloudtrail_to_cloudwatch.id
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [{
-      Effect = "Allow",
-      Action = [
-        "logs:CreateLogStream",
-        "logs:PutLogEvents"
-      ],
-      Resource = "${aws_cloudwatch_log_group.cloudtrail_log_group.arn}:*"
-    }]
-  })
-}
-# -------------------------------
-# CloudTrail
-# -------------------------------
-
-resource "aws_cloudtrail" "secrets_manager_trail" {
-  depends_on = [
-    aws_cloudwatch_log_group.cloudtrail_log_group,
-    aws_iam_role.cloudtrail_to_cloudwatch
-  ]
-
-  name                          = "secrets-manager-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.bucket
-  s3_key_prefix                 = "cloudtechs-secrets-manager-trail-no"
-  include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_log_file_validation    = true
-  enable_logging                = true
-
-  cloud_watch_logs_group_arn = var.cloud_watch_logs_group_arn
-  cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_to_cloudwatch.arn
-
-  sns_topic_name = aws_sns_topic.security_alarms.name
-
-  kms_key_id = null
-
-  event_selector {
-    read_write_type           = "All"
-    include_management_events = true
-    exclude_management_event_sources = [
-      "kms.amazonaws.com",
-      "rdsdata.amazonaws.com"
-    ]
-  }
-
-  tags = {
-    Name        = "SecretsManagerTrail"
-    Environment = "Production"
-  }
-}
-
-# -------------------------------
-# Metric Filter for GetSecretValue
-# -------------------------------
-resource "aws_cloudwatch_log_metric_filter" "get_secret_value_filter" {
-  name           = "GetSecretsValue"
+  name           = each.key
   log_group_name = aws_cloudwatch_log_group.cloudtrail_log_group.name
-
-  # Must be a quoted string
-  pattern = "{ ($.eventName = \"GetSecretValue\") }"
+  pattern        = each.value.pattern
 
   metric_transformation {
-    name          = "Secret is accessed"
-    namespace     = "SecurityMetrics"
-    value         = "1"
-    default_value = 0
-    unit          = "Count"
+    name      = each.key
+    namespace = "SecurityMetrics"
+    value     = "1"
+    unit      = "Count"
   }
 }
 
+resource "aws_cloudwatch_metric_alarm" "detections" {
+  for_each = local.detections
 
-# -------------------------------
-# SNS Topic + Subscription
-# -------------------------------
-resource "aws_sns_topic" "security_alarms" {
-  name = "SecurityAlarms"
-}
-
-resource "aws_sns_topic_subscription" "security_alarms_email" {
-  topic_arn = aws_sns_topic.security_alarms.arn
-  protocol  = "email"
-  endpoint  = "Ryan@cloudtechs.ai"
-}
-
-resource "aws_sns_topic_policy" "security_alarms_policy" {
-  arn = aws_sns_topic.security_alarms.arn
-
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid    = "AllowCloudTrailPublish",
-        Effect = "Allow",
-        Principal = {
-          Service = "cloudtrail.amazonaws.com"
-        },
-        Action   = "SNS:Publish",
-        Resource = aws_sns_topic.security_alarms.arn
-      }
-    ]
-  })
-}
-
-# -------------------------------
-# CloudWatch Alarm
-# -------------------------------
-resource "aws_cloudwatch_metric_alarm" "secret_accessed_alarm" {
-  alarm_name          = "Secret is accessed"
+  alarm_name          = each.key
+  alarm_description   = "Security detection: ${each.key}"
   comparison_operator = "GreaterThanOrEqualToThreshold"
   evaluation_periods  = 1
   threshold           = 1
   treat_missing_data  = "notBreaching"
 
   namespace   = "SecurityMetrics"
-  metric_name = "Secret is accessed"
-  statistic   = "Average"
+  metric_name = each.key
+  statistic   = "Sum"
   period      = 300
 
-  alarm_actions             = [aws_sns_topic.security_alarms.arn]
-  ok_actions                = [aws_sns_topic.security_alarms.arn]
-  insufficient_data_actions = [aws_sns_topic.security_alarms.arn]
-
+  alarm_actions   = [aws_sns_topic.security_alarms.arn]
   actions_enabled = true
+
+  depends_on = [aws_cloudwatch_log_metric_filter.detections]
 }
