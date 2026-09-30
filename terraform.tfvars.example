@@ -1,4 +1,4 @@
-api_key                    = "I need 4 coffees a day to function"
-oauth_token                = "I need 4 coffees a day to function"
-other_secret               = "I need 4 coffees a day to function"
-cloud_watch_logs_group_arn = "arn:aws:logs:us-east-1:{account}:log-group:cloudtechs-secretsmanager-loggroup:*"
+api_key                   = "your-api-key"
+oauth_token               = "your-oauth-token"
+other_secret              = "your-other-secret"
+cloud_watch_logs_group_arn = "arn:aws:logs:us-east-1:YOUR_ACCOUNT_ID:log-group:cloudtechs-secretsmanager-loggroup"
