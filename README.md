@@ -1,750 +1,221 @@
-🛡️ AWS SECURITY MONITORING SYSTEM
-Automated Cloud Security Monitoring & Alerting with AWS + Terraform
-<p align="center"> <img src="https://img.shields.io/badge/AWS-Cloud-orange?logo=amazon-aws" alt="AWS"> <img src="https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform" alt="Terraform"> <img src="https://img.shields.io/badge/CloudTrail-Audit-blue" alt="CloudTrail"> <img src="https://img.shields.io/badge/CloudWatch-Monitoring-blue" alt="CloudWatch"> <img src="https://img.shields.io/badge/Security-Automation-red" alt="Security"> </p> <p align="center"> <strong> An Infrastructure-as-Code security monitoring platform that detects sensitive AWS activity, centralizes audit logs, generates security metrics, and automatically delivers alerts. </strong> </p>
-📌 Overview
-
-The AWS Security Monitoring System is an automated cloud security monitoring and alerting platform built with AWS-native services and Terraform.
-
-The project demonstrates how multiple AWS services can be integrated into a centralized security monitoring pipeline capable of:
-
-🔍 Capturing AWS API activity with CloudTrail
-
-📊 Centralizing events with CloudWatch Logs
-
-🚨 Detecting sensitive activity with CloudWatch Metric Filters
-
-🔔 Triggering automated notifications through SNS
-
-🔐 Managing sensitive values with AWS Secrets Manager
-
-🗄️ Storing CloudTrail audit logs in Amazon S3
-
-🔑 Controlling service access through IAM
-
-🏗️ Provisioning infrastructure through Terraform
-
-The goal is to demonstrate practical experience in AWS Security Engineering, Infrastructure as Code, Observability, IAM, Monitoring, and Automated Incident Detection.
-
-🏗️ Architecture
-<img width="506" height="225" alt="AWS Security Pipeline" src="https://github.com/user-attachments/assets/58797f82-312e-4af2-b2c5-312f8f308ae0" />
-Security Monitoring Flow
-AWS ACCOUNT
-    |
-    v
-+-------------------+
-|    AWS CloudTrail |
-|-------------------|
-| API Activity      |
-| IAM Changes       |
-| Authentication    |
-| Secret Access     |
-+---------+---------+
-          |
-          |
-     +----+----+
-     |         |
-     v         v
-+---------+  +------------------+
-|   S3    |  | CloudWatch Logs  |
-|---------|  |------------------|
-| Audit   |  | Security Events  |
-| Logs    |  | Event Analysis   |
-+---------+  +--------+---------+
-                       |
-                       v
-              +------------------+
-              | Metric Filters   |
-              |------------------|
-              | Secret Access    |
-              | IAM Activity     |
-              | Authentication   |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              | CloudWatch Alarm |
-              +--------+---------+
-                       |
-                       v
-              +------------------+
-              |       SNS        |
-              |------------------|
-              | Email Alerts     |
-              +------------------+
-
-Infrastructure Provisioning
-Terraform
-    |
-    v
-+--------------------+
-| terraform init     |
-+---------+----------+
-          |
-          v
-+--------------------+
-| terraform validate |
-+---------+----------+
-          |
-          v
-+--------------------+
-| terraform plan     |
-+---------+----------+
-          |
-          v
-+--------------------+
-| terraform apply    |
-+---------+----------+
-          |
-          v
-+----------------------------+
-| AWS Security Infrastructure|
-+----------------------------+
-          |
-          v
-+----------------------------+
-| Automated Monitoring       |
-+----------------------------+
+<div align="center">
 
-🎯 What This Project Does
-Capability	AWS Service	Purpose
-API Auditing	CloudTrail	Records AWS API activity
-Log Aggregation	CloudWatch Logs	Centralizes security events
-Event Detection	Metric Filters	Detects sensitive API operations
-Alerting	CloudWatch Alarms	Evaluates security metrics
-Notifications	SNS	Sends security alerts
-Audit Storage	S3	Retains CloudTrail logs
-Secret Management	Secrets Manager	Stores sensitive configuration
-Access Control	IAM	Controls AWS service permissions
-Automation	Terraform	Provisions the environment
-🔐 Sensitive Secret Detection
+# AWS Security Monitoring System
 
-One of the primary detection workflows monitors access to AWS Secrets Manager.
+**Automated cloud security detection and alerting, provisioned entirely with Terraform.**
 
-When a secret is accessed, the event travels through the following pipeline:
+![AWS](https://img.shields.io/badge/AWS-Cloud-FF9900?logo=amazon-aws&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform&logoColor=white)
+![CloudTrail](https://img.shields.io/badge/CloudTrail-Audit_Logging-232F3E)
+![CloudWatch](https://img.shields.io/badge/CloudWatch-Detection_&_Alerting-232F3E)
+![Security](https://img.shields.io/badge/Focus-Cloud_Security-D13212)
 
-AWS Secrets Manager
-        |
-        v
-   GetSecretValue
-        |
-        v
-     CloudTrail
-        |
-        v
- CloudWatch Logs
-        |
-        v
-  Metric Filter
-        |
-        v
- Security Metric
-        |
-        v
- CloudWatch Alarm
-        |
-        v
-       SNS
-        |
-        v
- Email Notification
+</div>
 
+---
 
-The Terraform configuration creates a CloudWatch Metric Filter for:
+## Overview
 
-GetSecretValue
+This project deploys an end-to-end security monitoring pipeline on AWS. It captures API activity with CloudTrail, centralizes events in CloudWatch Logs, converts sensitive operations into metrics, and sends alerts through SNS, all defined as version-controlled Terraform.
 
+**The problem it solves:** sensitive actions in an AWS account (such as reading a secret) are easy to miss when engineers have to search raw audit logs by hand. This system turns those events into alerts automatically.
 
-This converts a raw CloudTrail event into a measurable CloudWatch security metric.
+**Primary detection:** any call to `GetSecretValue` against AWS Secrets Manager triggers an email notification.
 
-🔍 AWS CloudTrail
+### Key Features
 
-AWS CloudTrail provides the primary audit layer for the monitoring system.
+| Capability | AWS Service | Purpose |
+|---|---|---|
+| API auditing | CloudTrail | Multi-region record of management events (read and write) |
+| Log aggregation | CloudWatch Logs | Centralized security events for investigation |
+| Event detection | Metric Filters | Converts `GetSecretValue` events into a measurable metric |
+| Alert evaluation | CloudWatch Alarms | Fires when the metric reaches the configured threshold |
+| Notification | SNS | Delivers email alerts |
+| Audit retention | S3 | Encrypted, versioned, access-restricted log storage |
+| Secret storage | Secrets Manager | Holds sensitive configuration outside of code |
+| Access control | IAM | Dedicated service role for CloudTrail-to-CloudWatch delivery |
+| Provisioning | Terraform | Reproducible, reviewable infrastructure |
 
-The project configures CloudTrail for:
+---
 
-Multi-region logging
+## Architecture
 
-Management events
 
-Read/write API activity
+<img width="506" height="225" alt="AWS-Security-Pipeline" src="https://github.com/user-attachments/assets/58797f82-312e-4af2-b2c5-312f8f308ae0" />
 
-CloudWatch integration
+### Detection Flow
 
-S3 audit storage
+1. A principal calls `GetSecretValue` on a secret in Secrets Manager.
+2. CloudTrail records the API call and delivers it to S3 and CloudWatch Logs.
+3. A metric filter matches the event and increments a custom metric.
+4. A CloudWatch alarm evaluates the metric against its threshold.
+5. SNS sends an email notification to the subscribed address.
 
-Log file validation
+---
 
-CloudTrail acts as the primary source of security event data for the monitoring pipeline.
+## Security Design
 
-📊 Amazon CloudWatch
+- **Centralized, tamper-evident logging:** multi-region CloudTrail with log file validation enabled.
+- **Secure log storage:** S3 bucket with encryption, versioning, restricted access, and a CloudTrail-specific bucket policy.
+- **Least privilege:** a dedicated IAM service role grants CloudTrail only the permissions needed to create log streams and publish events to CloudWatch Logs.
+- **Secret isolation:** sensitive values are passed through Terraform `sensitive` variables and stored in Secrets Manager, never hard-coded.
+- **Globally unique bucket names:** generated from the AWS account ID plus a random suffix (for example `cloudtechs-security-monitoring-123456789012-a7f32c91`), so the project deploys in any account without edits.
+- **Reproducibility:** the full environment can be created and destroyed from source control.
 
-Amazon CloudWatch provides the monitoring, detection, and alerting layer.
+---
 
-CloudWatch Logs
+## Getting Started
 
-Centralizes CloudTrail events for investigation and analysis.
+### Prerequisites
 
-Metric Filters
+| Tool | Purpose |
+|---|---|
+| [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) | Authenticate and test the pipeline |
+| [Terraform](https://developer.hashicorp.com/terraform/install) | Provision the infrastructure |
+| [Git](https://git-scm.com/downloads) | Clone the repository |
+| An AWS account | Deployment target (IAM permissions to create the resources listed above) |
 
-Search CloudTrail events for specific security-sensitive operations.
+> **Cost note:** CloudTrail, CloudWatch, S3, and Secrets Manager are billed usage-based services. Run `terraform destroy` when you are finished.
 
-Current detection:
+### 1. Configure AWS credentials
 
-GetSecretValue
+```bash
+aws configure
+aws sts get-caller-identity   # confirm you are in the intended account
+```
 
-CloudWatch Alarms
+### 2. Clone the repository
 
-Evaluate security metrics and trigger notifications when configured thresholds are reached.
-
-🚨 Automated Alerting
-
-Amazon SNS provides the notification layer.
-
-Security Event
-      |
-      v
-CloudTrail
-      |
-      v
-CloudWatch Logs
-      |
-      v
-Metric Filter
-      |
-      v
-CloudWatch Alarm
-      |
-      v
-SNS
-      |
-      v
-Email Notification
-
-
-This reduces the need for engineers to continuously inspect CloudTrail logs manually.
-
-🗄️ S3 Audit Storage
-
-Amazon S3 provides durable storage for CloudTrail audit logs.
-
-The infrastructure is designed to provide:
-
-🔒 Encrypted storage
-
-🗂️ Versioning
-
-🔑 Restricted access
-
-📋 CloudTrail-specific bucket policies
-
-🌎 Multi-region CloudTrail logging
-
-Unique Bucket Naming
-
-S3 bucket names must be globally unique.
-
-The project therefore generates the bucket name using the AWS account ID and a unique suffix.
-
-Example:
-
-cloudtechs-security-monitoring-123456789012-a7f32c91
-
-
-This allows different AWS accounts to deploy the project without manually choosing a globally unique bucket name.
-
-🔑 IAM & Least Privilege
-
-The project creates a dedicated IAM role for the CloudTrail-to-CloudWatch integration.
-
-CloudTrail
-    |
-    v
-IAM Service Role
-    |
-    v
-CloudWatch Logs
-
-
-The role provides CloudTrail with the permissions required to:
-
-Create CloudWatch log streams
-
-Publish CloudTrail events to CloudWatch Logs
-
-This separates AWS service permissions from the user's own IAM credentials and follows the principle of least privilege.
-
-🔐 Secrets Management
-
-Sensitive configuration values are handled through Terraform variables and AWS Secrets Manager.
-
-Example variables include:
-
-api_key
-oauth_token
-other_secret
-
-
-Sensitive Terraform variables should be marked as sensitive and should never be committed to source control.
-
-The repository includes:
-
-secrets.tfvars.example
-
-
-Create your own local file:
-
-secrets.tfvars
-
-
-and keep it out of Git.
-
-🏗️ Infrastructure as Code
-
-The entire monitoring environment is provisioned using Terraform.
-
-Terraform Configuration
-        |
-        v
-terraform init
-        |
-        v
-terraform validate
-        |
-        v
-terraform plan
-        |
-        v
-terraform apply
-        |
-        v
-AWS Infrastructure
-        |
-        v
-Security Monitoring
-
-
-Terraform provides:
-
-♻️ Reproducible deployments
-
-📝 Version-controlled infrastructure
-
-🔍 Reviewable infrastructure changes
-
-🔐 Consistent security configuration
-
-🧹 Automated resource cleanup
-
-🚀 Faster environment provisioning
-
-🚀 Deployment
-Prerequisites
-
-Install:
-
-AWS CLI
-
-Terraform
-
-Git
-
-An AWS account
-
-Verify your AWS identity:
-
-aws sts get-caller-identity
-
-1. Clone the Repository
+```bash
 git clone https://github.com/CloudTechs-ai/AWS-Security-Monitoring-System.git
-
 cd AWS-Security-Monitoring-System
+```
 
-2. Configure Secrets
+### 3. Configure variables and secrets
 
-Copy the example configuration:
-
+```bash
 cp secrets.tfvars.example secrets.tfvars
+```
 
+Edit `secrets.tfvars` with your own values (for example `api_key`, `oauth_token`, `other_secret`, and the email address for alerts). This file is git-ignored. **Never commit it.**
 
-Edit the file with your own values.
+### 4. Initialize, format, and validate
 
-Never commit secrets.tfvars.
-
-3. Initialize Terraform
+```bash
 terraform init
-
-4. Format & Validate
 terraform fmt
 terraform validate
+```
 
-5. Review the Deployment
+### 5. Review the plan
 
-Always inspect the Terraform plan before applying:
+```bash
+terraform plan -var-file="secrets.tfvars"
+```
 
-terraform plan
+Read the plan carefully before continuing. `secrets.tfvars` is not loaded automatically by Terraform, so the `-var-file` flag is required.
 
-6. Deploy
-terraform apply
+### 6. Deploy
 
+```bash
+terraform apply -var-file="secrets.tfvars"
+```
 
-Review the resources Terraform intends to create and confirm the deployment.
+Type `yes` when prompted.
 
-7. Destroy
+### 7. Confirm the SNS subscription
 
-When the environment is no longer required:
+SNS sends a confirmation email to the configured address. **Open it and click *Confirm subscription*.** No alerts are delivered until you do.
 
-terraform destroy
+---
 
-📧 SNS Email Notifications
+## Testing the Detection Pipeline
 
-If email notifications are enabled, Amazon SNS sends a subscription confirmation message to the configured email address.
+Trigger the monitored event by reading the secret Terraform created:
 
-The recipient must confirm the subscription before receiving security notifications.
+```bash
+aws secretsmanager get-secret-value --secret-id <SECRET_NAME_OR_ARN>
+```
 
-Terraform
-    |
-    v
-SNS Subscription
-    |
-    v
-Confirmation Email
-    |
-    v
-User Confirms
-    |
-    v
-Security Alerts Enabled
+Find the secret name in the Terraform outputs or the Secrets Manager console.
 
-🧪 Testing
+**Expected result:** an alert email arrives after the alarm evaluates. CloudTrail delivery to CloudWatch Logs typically lags by several minutes, so allow some time.
 
-After deployment, the detection pipeline can be tested by accessing the monitored secret.
+**Where to verify each stage if no email arrives:**
 
-Expected event flow:
+| Stage | Where to check |
+|---|---|
+| Event captured | CloudTrail > Event history, or the CloudWatch log group |
+| Metric recorded | CloudWatch > Metrics (custom namespace from the metric filter) |
+| Alarm state | CloudWatch > Alarms (should move to `ALARM`) |
+| Delivery | SNS > Subscriptions (status must be *Confirmed*) |
 
-AWS Secrets Manager
-        |
-        v
-   GetSecretValue
-        |
-        v
-     CloudTrail
-        |
-        v
- CloudWatch Logs
-        |
-        v
-  Metric Filter
-        |
-        v
- Security Metric
-        |
-        v
- CloudWatch Alarm
-        |
-        v
-       SNS
+---
 
+## Cleanup
 
-This provides an end-to-end test of the monitoring architecture.
+```bash
+terraform destroy -var-file="secrets.tfvars"
+```
 
-🛡️ Security Design
+If the CloudTrail S3 bucket has versioned objects, you may need to empty it before destroy completes.
 
-The project demonstrates several cloud security principles.
+---
 
-Defense in Depth
+## Repository Structure
 
-Multiple AWS services contribute to the security monitoring architecture.
-
-IAM
- |
- v
-CloudTrail
- |
- v
-CloudWatch
- |
- +---- Logs
- |
- +---- Metrics
- |
- +---- Alarms
- |
- v
-SNS
- |
- v
-Security Notification
-
-Least Privilege
-
-IAM roles are scoped to the AWS services and resources that require access.
-
-Centralized Logging
-
-CloudTrail provides an auditable source of AWS API activity.
-
-Secure Storage
-
-S3 provides durable storage for CloudTrail audit logs.
-
-Secret Isolation
-
-Sensitive application values are stored through AWS Secrets Manager rather than hard-coded into infrastructure.
-
-Automated Detection
-
-CloudWatch transforms security events into metrics and alarms.
-
-Infrastructure Reproducibility
-
-Terraform allows the environment to be recreated from source-controlled configuration.
-
-📈 SRE & Observability
-Principle	Implementation
-Observability	CloudTrail + CloudWatch
-Logging	CloudWatch Logs + S3
-Metrics	CloudWatch Metric Filters
-Alerting	CloudWatch Alarms + SNS
-Auditability	CloudTrail
-Automation	Terraform
-Incident Detection	Security Event Filters
-Secret Management	AWS Secrets Manager
-Access Control	IAM
-Infrastructure Lifecycle	Terraform
-🧰 Technology Stack
-☁️ AWS
-
-AWS CloudTrail
-
-Amazon CloudWatch
-
-Amazon CloudWatch Logs
-
-Amazon S3
-
-Amazon SNS
-
-AWS Secrets Manager
-
-AWS IAM
-
-🏗️ Infrastructure
-
-Terraform
-
-AWS CLI
-
-Git
-
-GitHub
-
-🔐 Security
-
-Cloud security monitoring
-
-Audit logging
-
-IAM
-
-Least privilege
-
-Secrets management
-
-Security event detection
-
-Automated alerting
-
-⚙️ Operations
-
-Observability
-
-Monitoring
-
-Alerting
-
-Incident detection
-
-Infrastructure automation
-
-Operational logging
-
-Infrastructure lifecycle management
-
-📁 Repository Structure
+```
 AWS-Security-Monitoring-System/
-|
-+-- main.tf
-+-- variables.tf
-+-- outputs.tf
-+-- secrets.tfvars.example
-+-- .gitignore
-+-- .terraform.lock.hcl
-+-- README.md
+├── main.tf                   # Core resources: CloudTrail, CloudWatch, SNS, S3, IAM, Secrets Manager
+├── variables.tf              # Input variables (sensitive values marked sensitive)
+├── outputs.tf                # Useful resource outputs
+├── secrets.tfvars.example    # Template for local secrets (copy to secrets.tfvars)
+├── .terraform.lock.hcl       # Provider version lock
+├── .gitignore                # Excludes state and secret files
+└── README.md
+```
 
+---
 
-Terraform's local working directory and state files should not be committed to GitHub.
+## Security Considerations
 
-⚠️ Security Considerations
+Never commit the following (all are covered by `.gitignore`):
 
-Never commit sensitive files such as:
-
+```
 terraform.tfstate
 terraform.tfstate.*
 *.tfvars
 *.tfvars.json
+```
 
+Terraform state can contain sensitive values. For production use, store state in an encrypted remote backend (for example S3 with DynamoDB locking) with restricted access.
 
-The repository should contain:
+---
 
-secrets.tfvars.example
+## Roadmap
 
+- [ ] Additional detections: IAM policy changes, root account usage, failed console logins
+- [ ] Amazon GuardDuty and AWS Security Hub integration
+- [ ] Lambda-based automated remediation
+- [ ] Slack / Microsoft Teams notifications
+- [ ] Multi-account and cross-account CloudTrail
+- [ ] Reusable Terraform modules and remote state backend
+- [ ] CI/CD with GitHub Actions (`fmt`, `validate`, and security scanning on pull requests)
+- [ ] VPC Flow Logs and AWS WAF monitoring
 
-but not:
+---
 
-secrets.tfvars
+## Skills Demonstrated
 
+**Cloud Security:** audit logging, detection engineering, secrets management, least-privilege IAM
+**AWS:** CloudTrail, CloudWatch (Logs, Metric Filters, Alarms), S3, SNS, Secrets Manager, IAM
+**Infrastructure as Code:** Terraform (variables, sensitive inputs, lifecycle management, reproducible deployments)
+**Operations / SRE:** observability, alerting, incident detection
 
-Terraform state can contain sensitive infrastructure information and potentially secret values.
+---
 
-For production environments, Terraform state should be stored in a secured remote backend with appropriate encryption and access controls.
+<div align="center">
 
-🔮 Future Enhancements
+Built to demonstrate practical AWS security engineering, infrastructure as code, and cloud observability.
 
-Potential improvements include:
-
-AWS Security Hub integration
-
-Amazon GuardDuty integration
-
-AWS WAF monitoring
-
-VPC Flow Logs
-
-Lambda-based remediation
-
-Automated incident response
-
-Slack / Microsoft Teams notifications
-
-SIEM integration
-
-Amazon OpenSearch dashboards
-
-Multi-account monitoring
-
-Cross-account CloudTrail
-
-Automated compliance checks
-
-Terraform modules
-
-Policy-as-code
-
-GitHub Actions CI/CD
-
-Automated security testing
-
-💼 Skills Demonstrated
-
-This project demonstrates practical experience with:
-
-AWS Security
-CloudTrail
-CloudWatch
-S3
-SNS
-Secrets Manager
-IAM
-
-Infrastructure as Code
-Terraform
-
-Security Engineering
-Audit Logging
-Secret Management
-Least Privilege
-Event Detection
-Automated Alerting
-
-SRE / Operations
-Observability
-Monitoring
-Incident Detection
-Infrastructure Automation
-Operational Logging
-
-⭐ Project Highlights
-🔐 Security
-
-Automated monitoring of sensitive AWS API activity.
-
-🏗️ Infrastructure as Code
-
-The AWS monitoring environment is provisioned through Terraform.
-
-📊 Observability
-
-CloudTrail, CloudWatch Logs, metrics, and alarms provide centralized visibility.
-
-🚨 Automated Detection
-
-Security events can automatically generate notifications through SNS.
-
-♻️ Reproducibility
-
-Infrastructure configuration and resource naming are designed for repeatable deployments across AWS accounts.
-
-🧠 Engineering Focus
-
-Combines:
-
-Cloud Security + AWS + Terraform + IAM + Observability + Automation
-
-📌 Project Summary
-
-The AWS Security Monitoring System demonstrates how AWS-native services can be integrated into a repeatable security monitoring architecture.
-
-The core workflow is:
-
-COLLECT
-   |
-   v
-CloudTrail
-   |
-   v
-STORE
-   |
-   +----> S3
-   |
-   +----> CloudWatch Logs
-             |
-             v
-          DETECT
-             |
-             v
-       Metric Filters
-             |
-             v
-          ANALYZE
-             |
-             v
-      CloudWatch Alarms
-             |
-             v
-           ALERT
-             |
-             v
-            SNS
-
-Built With
-AWS
-  +
-Terraform
-  +
-Cloud Security
-  +
-Observability
-  +
-Automation
-
-<p align="center"> <strong>🛡️ Built to demonstrate practical AWS Security Engineering, Infrastructure as Code, and Cloud Observability.</strong> </p>
+</div>
