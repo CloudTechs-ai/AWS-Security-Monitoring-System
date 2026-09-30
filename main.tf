@@ -34,7 +34,8 @@ resource "aws_secretsmanager_secret_version" "monitoring_secret_value" {
 # S3 Bucket for CloudTrail logs
 # -------------------------------
 resource "aws_s3_bucket" "cloudtrail_bucket" {
-  bucket = "cloudtechs-secrets-manager-trail-no"
+  bucket = "cloudtechs-security-monitoring-${data.aws_caller_identity.current.account_id}"
+
 
   tags = {
     Name        = "CloudTrailLogBucket"
